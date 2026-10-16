@@ -111,6 +111,12 @@ struct thread {
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+	struct list children;               /* Unwaited child status records. */
+	struct child_status *child_status;  /* Shared with this process's parent. */
+	struct file_handle **fd_table;      /* Separately allocated descriptor table. */
+	struct file *executable;            /* Deny writes until exec or exit. */
+	int exit_status;
+	bool user_process;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

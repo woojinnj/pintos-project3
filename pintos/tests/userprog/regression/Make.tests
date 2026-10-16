@@ -1,0 +1,5 @@
+# Additional lifecycle and user-memory regression coverage.
+tests/userprog/regression_TESTS = $(addprefix tests/userprog/regression/,exec-limits memory-access orphan-wait)
+tests/userprog/regression_PROGS = $(tests/userprog/regression_TESTS)
+$(foreach prog,$(tests/userprog/regression_PROGS),$(eval $(prog)_SRC = $(prog).c tests/lib.c))
+tests/userprog/regression/memory-access_PUTFILES = tests/userprog/sample.txt
