@@ -7,7 +7,7 @@
 #include "threads/mmu.h"
 /* 프레임 테이블 전역으로 선언 */
 /* 1M바이트니까 1M/4KB 하면 256개여서 256개로 배열 선언하면 되지 않나? */
-struct list *frame_table;
+struct list frame_table;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -23,7 +23,7 @@ vm_init (void) {
 	/* TODO: Your code goes here. */
 	/* 프레임 테이블 초기화 */
 	supplemental_page_table_init(thread_current()->spt);
-	list_init(frame_table);
+	list_init(&frame_table);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
