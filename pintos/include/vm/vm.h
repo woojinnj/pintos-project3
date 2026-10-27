@@ -5,23 +5,23 @@
 #include "lib/kernel/hash.h"
 
 enum vm_type {
-	/* page not initialized */
+	/* 초기화되지 않은 페이지 */
 	VM_UNINIT = 0,
-	/* page not related to the file, aka anonymous page */
+	/* 파일과 무관한 페이지, 즉 익명(anonymous) 페이지 */
 	VM_ANON = 1,
-	/* page that realated to the file */
+	/* 파일과 연관된 페이지 */
 	VM_FILE = 2,
-	/* page that hold the page cache, for project 4 */
+	/* 페이지 캐시를 담는 페이지, 프로젝트 4용 */
 	VM_PAGE_CACHE = 3,
 
-	/* Bit flags to store state */
+	/* 상태를 저장하는 비트 플래그 */
 
-	/* Auxillary bit flag marker for store information. You can add more
-	 * markers, until the value is fit in the int. */
+	/* 정보를 저장하기 위한 보조 비트 플래그 마커. int에 들어가는 값까지
+	 * 마커를 더 추가해도 된다. */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
-	/* DO NOT EXCEED THIS VALUE. */
+	/* 이 값을 넘기지 말 것. */
 	VM_MARKER_END = (1 << 31),
 };
 
@@ -37,19 +37,19 @@ struct thread;
 
 #define VM_TYPE(type) ((type) & 7)
 
-/* The representation of "page".
- * This is kind of "parent class", which has four "child class"es, which are
- * uninit_page, file_page, anon_page, and page cache (project4).
- * DO NOT REMOVE/MODIFY PREDEFINED MEMBER OF THIS STRUCTURE. */
+/* "page"의 표현.
+ * 일종의 "부모 클래스"이며, 네 개의 "자식 클래스"인
+ * uninit_page, file_page, anon_page, 페이지 캐시(프로젝트 4)를 가진다.
+ * 이 구조체에 미리 정의된 멤버는 삭제/수정하지 말 것. */
 struct page {
 	const struct page_operations *operations;
-	void *va;              /* Address in terms of user space */
-	struct frame *frame;   /* Back reference for frame */
+	void *va;              /* 유저 공간 기준 주소 */
+	struct frame *frame;   /* 프레임에 대한 역참조 */
 
-	/* Your implementation */
+	/* 직접 구현하는 부분 */
 	struct hash_elem elem; /* 해시 충돌 체인 */
-	/* Per-type data are binded into the union.
-	 * Each function automatically detects the current union */
+	/* 타입별 데이터는 union에 묶여 있다.
+	 * 각 함수는 현재 union의 종류를 자동으로 판별한다. */
 	union {
 		struct uninit_page uninit;
 		struct anon_page anon;
@@ -60,17 +60,17 @@ struct page {
 	};
 };
 
-/* The representation of "frame" */
+/* "frame"의 표현 */
 struct frame {
 	void *kva;
 	struct page *page;
 	struct list_elem *elem;
 };
 
-/* The function table for page operations.
- * This is one way of implementing "interface" in C.
- * Put the table of "method" into the struct's member, and
- * call it whenever you needed. */
+/* 페이지 연산을 위한 함수 테이블.
+ * C에서 "인터페이스"를 구현하는 한 가지 방법이다.
+ * "메서드" 테이블을 구조체 멤버에 넣어 두고,
+ * 필요할 때마다 호출한다. */
 struct page_operations {
 	bool (*swap_in) (struct page *, void *);
 	bool (*swap_out) (struct page *);
@@ -83,9 +83,9 @@ struct page_operations {
 #define destroy(page) \
 	if ((page)->operations->destroy) (page)->operations->destroy (page)
 
-/* Representation of current process's memory space.
- * We don't want to force you to obey any specific design for this struct.
- * All designs up to you for this. */
+/* 현재 프로세스의 메모리 공간의 표현.
+ * 이 구조체에는 특정 설계를 강제하지 않는다.
+ * 설계는 전적으로 자유이다. */
 struct supplemental_page_table {
 	struct hash *hash_table;
 };
