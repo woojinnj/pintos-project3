@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "threads/palloc.h"	
 #include "lib/kernel/hash.h"
+#include "threads/thread.h"
 
 enum vm_type {
 	/* 초기화되지 않은 페이지 */
@@ -46,6 +47,7 @@ struct page {
 	void *va;              /* 유저 공간 기준 주소 */
 	struct frame *frame;   /* 프레임에 대한 역참조 */
 
+	bool writable;		   /* 쓸래 안쓸래 */
 	/* 직접 구현하는 부분 */
 	struct hash_elem elem; /* 해시 충돌 체인 */
 	/* 타입별 데이터는 union에 묶여 있다.
@@ -88,6 +90,15 @@ struct page_operations {
  * 설계는 전적으로 자유이다. */
 struct supplemental_page_table {
 	struct hash *hash_table;
+};
+
+struct file_info {
+	struct file *file;
+	off_t ofs;
+	uint8_t *upage;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+	bool writable;
 };
 
 #include "threads/thread.h"

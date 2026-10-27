@@ -25,8 +25,8 @@ void syscall_handler (struct intr_frame *);
 
 struct lock filesys_lock;
 
-/* dup2 aliases share one position and lifetime within a process.  fork
- * duplicates each distinct handle, retaining aliases in the child's table. */
+/* dup2로 만든 별칭(alias)은 한 프로세스 안에서 읽기/쓰기 위치와 수명을 공유한다.
+ * fork는 서로 다른 핸들마다 하나씩 복제하며, 별칭 관계는 자식의 테이블에도 유지한다. */
 struct file_handle {
 	struct file *file;
 	unsigned references;
@@ -55,8 +55,8 @@ syscall_exit (int status) {
 	NOT_REACHED ();
 }
 
-/* Check every page before accessing user memory or taking the filesystem
- * lock.  The range check also rejects integer wraparound and kernel memory. */
+/* 사용자 메모리에 접근하거나 파일 시스템 락을 잡기 전에 모든 페이지를
+ * 검사한다. 범위 검사는 정수 wraparound와 커널 메모리도 거부한다. */
 static void
 check_buffer (const void *buffer, size_t size, bool writable) {
 	if (size == 0)
@@ -79,7 +79,7 @@ check_buffer (const void *buffer, size_t size, bool writable) {
 
 static void
 check_string (const char *string) {
-	/* Validate each page before searching it for the terminator. */
+	/* 종료 문자를 찾기 전에 각 페이지를 먼저 검증한다. */
 	for (;;) {
 		check_buffer (string, 1, false);
 		size_t length = PGSIZE - pg_ofs (string);
@@ -101,7 +101,7 @@ is_file (struct file_handle *handle) {
 	return handle != NULL && handle != STDIN_HANDLE && handle != STDOUT_HANDLE;
 }
 
-/* Caller owns filesys_lock. */
+/* 호출자가 filesys_lock을 쥐고 있어야 한다. */
 static void
 close_fd (int fd) {
 	struct file_handle *handle = get_handle (fd);
@@ -275,7 +275,7 @@ syscall_handler (struct intr_frame *f) {
 			size_t length = strnlen (name, PGSIZE);
 			if (length == PGSIZE)
 				syscall_exit (-1);
-			/* Copy before exec destroys the caller's address space. */
+			/* exec가 호출자의 주소 공간을 없애기 전에 먼저 복사한다. */
 			char *command = palloc_get_page (0);
 			if (command == NULL)
 				syscall_exit (-1);
@@ -293,7 +293,7 @@ syscall_handler (struct intr_frame *f) {
 			check_string (name);
 			lock_acquire (&filesys_lock);
 			if (f->R.rax == SYS_CREATE)
-				/* off_t is signed, whereas the syscall size is unsigned. */
+				/* off_t는 부호 있는 타입이고 syscall의 size는 부호 없는 타입이다. */
 				f->R.rax = (unsigned) f->R.rsi <= INT_MAX &&
 					filesys_create (name, (unsigned) f->R.rsi);
 			else

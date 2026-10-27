@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "lib/kernel/hash.h"
 #include "threads/mmu.h"
+#include "userprog/process.h"
 /* 프레임 테이블 전역으로 선언 */
 /* 1M바이트니까 1M/4KB 하면 256개여서 256개로 배열 선언하면 되지 않나? */
 struct list frame_table;
@@ -48,12 +49,13 @@ static struct frame *vm_evict_frame (void);
 /* 초기화 함수와 함께 대기 중인(pending) 페이지 객체를 생성한다. 페이지를
  * 만들고 싶다면 직접 생성하지 말고 이 함수나
  * `vm_alloc_page`를 통해 생성할 것. */
+/* upage = uva(user virtual address) - 지호 */
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
-
+			
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 
 	/* upage가 이미 사용 중인지 확인한다. */
@@ -61,8 +63,29 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: 페이지를 생성하고, VM 타입에 맞는 초기화 함수를 가져온 뒤,
 		 * TODO: uninit_new를 호출하여 "uninit" 페이지 구조체를 만든다.
 		 * TODO: uninit_new 호출 후에 필드를 수정해야 한다. */
+		/* 페이지를 새로 할당해서 생성함 */
+		struct page* new_page = malloc(sizeof(struct page));
 
+		/* 생성됐는지 확인 */
+		if(new_page == NULL) goto err;
+
+		/* vm_type이 뭔지 보고 확인 */
+		switch (type) {
+			/* type이 VM_ANON일때 */
+			case VM_ANON:
+				uninit_new(new_page, upage, init, type, aux, anon_initializer);
+				break;
+			/* type이 VM_FILE일때 */
+			case VM_FILE:
+				uninit_new(new_page, upage, init, type, aux, file_backed_initializer);
+				break;
+		}
+		/* 페이지에 권한 인자에 있는 writable을 담음 */
+		new_page->writable = writable;
 		/* TODO: 페이지를 spt에 삽입한다. */
+		bool result = spt_insert_page(spt, new_page);
+		if(!result) goto err;
+		return true;
 	}
 err:
 	return false;
@@ -190,13 +213,23 @@ vm_handle_wp (struct page *page UNUSED) {
 
 /* 성공하면 true를 반환한다. */
 bool
-vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
-		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
+vm_try_handle_fault (struct intr_frame *f , void *addr , 
+	bool user , bool write , bool not_present ) {
+
+	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
+	int result;
 	/* TODO: 폴트가 유효한지 검증한다. */
 	/* TODO: 여기에 코드를 작성할 것. */
 
+	/* 쓰기 권한이 없거나 사용자 주소가 아니면 false */
+	/* 이 조건에 안 걸리고 페이지가 존재해도 false */
+	if ( !write || !user ) {
+    	return false;
+	}
+	else if (not_present) {
+    	return false;
+	}
 	return vm_do_claim_page (page);
 }
 

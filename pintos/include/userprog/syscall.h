@@ -6,7 +6,7 @@
 #include "threads/synch.h"
 
 struct thread;
-/* One page of pointers on x86-64; kept off the kernel stack. */
+/* x86-64에서 포인터 한 페이지 분량이며, 커널 스택에는 두지 않는다. */
 #define FD_COUNT 512
 extern struct lock filesys_lock;
 
