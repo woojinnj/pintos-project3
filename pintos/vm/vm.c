@@ -4,6 +4,10 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "lib/kernel/hash.h"
+#include "threads/mmu.h"
+/* 프레임 테이블 전역으로 선언 */
+/* 1M바이트니까 1M/4KB 하면 256개여서 256개로 배열 선언하 */
+struct list *frame_table;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -17,6 +21,8 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	/* 프레임 테이블 초기화 */
+	list_init(frame_table);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -115,8 +121,10 @@ spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 	// 		return succ;
 	// 	}
 	// }
-	hash_insert(spt->hash_table, &page->elem);
-	succ = true;
+	if (hash_insert(spt->hash_table, &page->elem) == NULL) {
+		succ = true;
+	}
+	
 	return succ;
 }
 
@@ -153,6 +161,15 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+	/* User Page 가져옴 */
+	void *new_addr = palloc_get_page(PAL_USER);
+	frame = malloc(sizeof(*frame));
+
+	/* frame 초기화 */
+	frame->kva = new_addr;		/* kva에 new_addr 넣어줌 */
+	frame->page = NULL;			/* page에 NULL을 넣어줌 */
+	/* frame_table에 elem넣어줌 */
+	list_push_back(frame_table, frame->elem);	
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -161,7 +178,8 @@ vm_get_frame (void) {
 
 /* Growing the stack. */
 static void
-vm_stack_growth (void *addr UNUSED) {
+vm_stack_growth (void *addr) {
+
 }
 
 /* Handle the fault on write_protected page */
@@ -194,7 +212,7 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-
+	
 	return vm_do_claim_page (page);
 }
 
@@ -208,7 +226,8 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-
+	/* 수정 필요 가능성 높음 */
+	pml4_set_page (thread_current()->pml4, page->va, frame->kva, true); 
 	return swap_in (page, frame->kva);
 }
 
