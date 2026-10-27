@@ -6,7 +6,7 @@
 #include "lib/kernel/hash.h"
 #include "threads/mmu.h"
 /* 프레임 테이블 전역으로 선언 */
-/* 1M바이트니까 1M/4KB 하면 256개여서 256개로 배열 선언하 */
+/* 1M바이트니까 1M/4KB 하면 256개여서 256개로 배열 선언하면 되지 않나? */
 struct list *frame_table;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
@@ -22,6 +22,7 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	/* 프레임 테이블 초기화 */
+	supplemental_page_table_init(thread_current()->spt);
 	list_init(frame_table);
 }
 
@@ -209,10 +210,16 @@ vm_dealloc_page (struct page *page) {
 
 /* Claim the page that allocate on VA. */
 bool
-vm_claim_page (void *va UNUSED) {
+vm_claim_page (void *va) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
-	
+	// 페이지 할당받고 동적할당 실패 시 false
+	page = malloc(sizeof(struct page));
+	if (page == NULL) {
+		return false;
+	}
+
+	page->va = va;
 	return vm_do_claim_page (page);
 }
 
@@ -227,7 +234,7 @@ vm_do_claim_page (struct page *page) {
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	/* 수정 필요 가능성 높음 */
-	pml4_set_page (thread_current()->pml4, page->va, frame->kva, true); 
+	pml4_set_page (thread_current()->pml4, page->va, frame->kva, thread_current()->pml4);  /* pml4가 들어가는게 아니면 임시로 read/write다 되는 true로 바꿔넣기 */
 	return swap_in (page, frame->kva);
 }
 
