@@ -170,7 +170,7 @@ vm_get_frame (void) {
 	frame->kva = new_addr;		/* kva에 new_addr 넣어줌 */
 	frame->page = NULL;			/* page에 NULL을 넣어줌 */
 	/* frame_table에 elem넣어줌 */
-	list_push_back(frame_table, frame->elem);	
+	list_push_back(&frame_table, frame->elem);	
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
