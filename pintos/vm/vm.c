@@ -224,10 +224,12 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 
 	/* 쓰기 권한이 없거나 사용자 주소가 아니면 false */
 	/* 이 조건에 안 걸리고 페이지가 존재해도 false */
-	if (!write || !user || !not_present) {
-		return false;
+	if ( !write || !user ) {
+    	return false;
 	}
-
+	else if (not_present) {
+    	return false;
+	}
 	return vm_do_claim_page (page);
 }
 
