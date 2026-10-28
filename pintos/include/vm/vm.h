@@ -3,7 +3,6 @@
 #include <stdbool.h>
 #include "threads/palloc.h"	
 #include "lib/kernel/hash.h"
-#include "threads/thread.h"
 
 enum vm_type {
 	/* 초기화되지 않은 페이지 */
@@ -66,7 +65,7 @@ struct page {
 struct frame {
 	void *kva;
 	struct page *page;
-	struct list_elem *elem;
+	struct list_elem elem;
 };
 
 /* 페이지 연산을 위한 함수 테이블.
@@ -89,8 +88,8 @@ struct page_operations {
  * 이 구조체에는 특정 설계를 강제하지 않는다.
  * 설계는 전적으로 자유이다. */
 struct supplemental_page_table {
-	struct hash *hash_table;
-};
+	struct hash hash_table;
+}; 
 
 struct file_info {
 	struct file *file;

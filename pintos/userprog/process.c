@@ -671,14 +671,16 @@ lazy_load_segment(struct page *page, void *aux)
 	struct file_info *info = (struct file_info *)aux;
 	
 	/* 파일의 읽을 위치를 ofs로 설정한다 */
-	file_seek(info->file,info->ofs);
+	// file_seek(info->file, info->ofs);
 	/* 잘못된 read 발생시 false 반환 */
-	if(file_read(info->file, page->frame->kva, info->read_bytes)!= (int)(info->read_bytes)){
+	if(file_read(info->file, page->frame->kva + info->ofs, info->read_bytes) != (int)(info->read_bytes)) {
 		palloc_free_page(page->frame->kva);
+        page->frame->page = NULL;
+		page->frame = NULL;
 		return false;
 	}
 	/*  */
-	memset(page->frame->kva+info->read_bytes,0,info->zero_bytes);
+	memset(page->frame->kva + info->read_bytes, 0, info->zero_bytes);
 	return true;
 }
 
@@ -703,6 +705,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	/* 의심 */
+	struct file_info *info = malloc(sizeof(struct file_info));
+	if(!info) return false;
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
@@ -713,24 +718,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* TODO: lazy_load_segment에 정보를 넘기기 위해 aux를 설정한다. */
 		/* file_info에 load_segment 인자 세팅후 aux에 시작 주소 전달 */
 		void *aux = NULL;
-		struct file_info *info;
 		info->file = file;
 		info->ofs = ofs;
 		info->upage = upage;
-		info->read_bytes = read_bytes;
-		info->zero_bytes = zero_bytes;
+		info->read_bytes = page_read_bytes;
+		info->zero_bytes = page_zero_bytes;
 		info->writable = writable;
 		aux = (void *)info;
 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, aux)){
+			free(info); 
 			return false;
-
+		}
 		/* 다음으로 진행한다. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += PGSIZE;
 	}
+	free(info); 
 	return true;
 }
 

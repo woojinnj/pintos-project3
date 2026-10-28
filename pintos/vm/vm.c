@@ -23,8 +23,15 @@ vm_init (void) {
 	/* 위쪽 줄은 수정하지 말 것. */
 	/* TODO: 여기에 코드를 작성할 것. */
 	/* 프레임 테이블 초기화 */
-	supplemental_page_table_init(thread_current()->spt);
 	list_init(&frame_table);
+}
+
+// 비교 함수 (정렬 기준)
+static bool 
+my_list_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct frame *ea = list_entry(a, struct frame, elem);
+	struct frame *eb = list_entry(b, struct frame, elem);
+	return ea->kva < eb->kva;
 }
 
 /* 페이지의 타입을 가져온다. 페이지가 초기화된 이후의 타입을 알고 싶을 때
@@ -70,7 +77,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if(new_page == NULL) goto err;
 
 		/* vm_type이 뭔지 보고 확인 */
-		switch (type) {
+		switch (VM_TYPE(type)) {
 			/* type이 VM_ANON일때 */
 			case VM_ANON:
 				uninit_new(new_page, upage, init, type, aux, anon_initializer);
@@ -92,60 +99,23 @@ err:
 }
 
 /* spt에서 VA를 찾아 페이지를 반환한다. 오류 시 NULL을 반환한다. */
+/* 의심 */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
-	struct page *page = NULL;
-	/* 순회할 해쉬 테이블, 버킷을 담고있음 */
-	struct hash_iterator i;
+	
+	struct page p;
+	struct hash_elem *e;
 
-	// 해시 반복자 초기화
-	hash_first(&i, spt->hash_table);
-	// 해시 안의 모든 hash_elem을 순회, 중간에 끝날 수 있음, hash_next에서 다음 요소가 없으면 NULL을 반환함
-	while (hash_next(&i)) {
-		// 현재 페이지를 hash_cur를 사용해서 가져옴
-		page = hash_entry(hash_cur(&i), struct page, elem);
-		
-		// 지금 가리키고 있는 페이지의 가상 주소와 인자로 주어진 가상 주소가 같으면 이거 반환
-		if(page->va == va) {
-			break;
-		}
-	}
-	return page;
-	/* TODO: 이 함수를 구현할 것. */
-	// for(int i=0; i<spt->spt_table->bucket_cnt; i++){
-	// 	struct list_elem *cur_elem = list_begin(&spt->spt_table->buckets[i]);
-	// 	struct page *cur_page = hash_entry(list_entry(cur_elem, struct hash_elem, list_elem), struct page, elem);
-	// 	if(cur_page->va == va){
-	// 		return cur_page;		
-	// 	}
-	// }
-	// if(spt==NULL || va == NULL) return NULL;
-	// int hash_va = hash_int((uint64_t)va) % spt->spt_table->bucket_cnt;
-	// struct hash_elem *find_elem = list_elem_to_hash_elem(list_begin(&spt->spt_table->buckets[hash_va]));
-	// if(find_elem)
-	// page = hash_entry(find_elem, struct page, elem);
+	p.va = pg_round_down(va);
+	e = hash_find (&spt->hash_table, &p.elem);
+	return e != NULL ? hash_entry (e, struct page, elem) : NULL;
 }
 
 /* 검증을 거쳐 PAGE를 spt에 삽입한다. */
 bool
 spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 	int succ = false;
-	/* TODO: 이 함수를 구현할 것. */
-	// uint64_t idx = hash_int((uint64_t)page->va)%spt->hash_table->bucket_cnt;
-	// struct hash_elem *find_elem = list_elem_to_hash_elem(list_begin(&spt->hash_table->buckets[idx]));
-	// struct hash_iterator i;
-
-	// 해시 반복자 초기화
-	// hash_first(&i, spt->hash_table);
-	// 해시 안의 모든 hash_elem을 순회, 중간에 끝날 수 있음, hash_next에서 다음 요소가 없으면 NULL을 반환함
-	// while (hash_next(&i)) {
-	// 	// 현재 페이지를 hash_cur를 사용해서 가져오고 비교
-	// 	struct page *cur_page = hash_entry(hash_cur(&i), struct page, elem);
-	// 	if(cur_page == page) {
-	// 		return succ;
-	// 	}
-	// }
-	if (hash_insert(spt->hash_table, &page->elem) == NULL) {
+	if (hash_insert(&spt->hash_table, &page->elem) == NULL) {
 		succ = true;
 	}
 	
@@ -154,8 +124,8 @@ spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 
 void
 spt_remove_page (struct supplemental_page_table *spt, struct page *page) {
+	hash_delete(&spt->hash_table, &page->elem);
 	vm_dealloc_page (page);
-	return true;
 }
 
 /* 쫓겨날(evict) struct frame을 가져온다. */
@@ -187,13 +157,14 @@ vm_get_frame (void) {
 	/* TODO: 이 함수를 구현할 것. */
 	/* User Page 가져옴 */
 	void *new_addr = palloc_get_page(PAL_USER);
+	if(!new_addr) return NULL;
 	frame = malloc(sizeof(*frame));
-
+	if(!frame) return NULL;
 	/* frame 초기화 */
 	frame->kva = new_addr;		/* kva에 new_addr 넣어줌 */
 	frame->page = NULL;			/* page에 NULL을 넣어줌 */
 	/* frame_table에 elem넣어줌 */
-	list_push_back(&frame_table, frame->elem);	
+	list_insert_ordered(&frame_table, &frame->elem, my_list_less, NULL);	
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -224,11 +195,11 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 
 	/* 쓰기 권한이 없거나 사용자 주소가 아니면 false */
 	/* 이 조건에 안 걸리고 페이지가 존재해도 false */
-	if ( !write || !user ) {
+	if ( !write || !user || !not_present ) {
     	return false;
 	}
 	else if (not_present) {
-    	return false;
+    	page = spt_find_page(spt, addr);
 	}
 	return vm_do_claim_page (page);
 }
@@ -244,15 +215,11 @@ vm_dealloc_page (struct page *page) {
 /* VA에 할당된 페이지를 claim한다. */
 bool
 vm_claim_page (void *va) {
-	struct page *page = NULL;
+	struct page *page = spt_find_page(&thread_current()->spt, va);
 	/* TODO: 이 함수를 구현할 것. */
-	// 페이지 할당받고 동적할당 실패 시 false
-	page = malloc(sizeof(struct page));
-	if (page == NULL) {
+	/* 만약 못찾아서 NULL이 반환되면 false로 종료 */
+	if(!page)
 		return false;
-	}
-
-	page->va = va;
 	return vm_do_claim_page (page);
 }
 
@@ -267,7 +234,8 @@ vm_do_claim_page (struct page *page) {
 
 	/* TODO: 페이지의 VA를 프레임의 PA에 매핑하도록 페이지 테이블 엔트리를 삽입한다. */
 	/* 수정 필요 가능성 높음 */
-	pml4_set_page (thread_current()->pml4, page->va, frame->kva, thread_current()->pml4);  /* pml4가 들어가는게 아니면 임시로 read/write다 되는 true로 바꿔넣기 */
+	bool result = pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable);  /* pml4가 들어가는게 아니면 임시로 read/write다 되는 true로 바꿔넣기 */
+	if(!result) return false;
 	return swap_in (page, frame->kva);
 }
 
@@ -287,7 +255,7 @@ static bool my_less(const struct hash_elem *a, const struct hash_elem *b, void *
 /* 새 supplemental page table을 초기화한다. */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(spt->hash_table, my_hash, my_less, NULL);
+	hash_init(&spt->hash_table, my_hash, my_less, NULL);
 }
 
 /* src의 supplemental page table을 dst로 복사한다. */
