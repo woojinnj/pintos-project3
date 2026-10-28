@@ -671,14 +671,16 @@ lazy_load_segment(struct page *page, void *aux)
 	struct file_info *info = (struct file_info *)aux;
 	
 	/* 파일의 읽을 위치를 ofs로 설정한다 */
-	file_seek(info->file,info->ofs);
+	// file_seek(info->file, info->ofs);
 	/* 잘못된 read 발생시 false 반환 */
-	if(file_read(info->file, page->frame->kva, info->read_bytes)!= (int)(info->read_bytes)){
+	if(file_read(info->file, page->frame->kva + info->ofs, info->read_bytes) != (int)(info->read_bytes)) {
 		palloc_free_page(page->frame->kva);
+        page->frame->page = NULL;
+		page->frame = NULL;
 		return false;
 	}
 	/*  */
-	memset(page->frame->kva+info->read_bytes,0,info->zero_bytes);
+	memset(page->frame->kva + info->read_bytes, 0, info->zero_bytes);
 	return true;
 }
 
@@ -733,7 +735,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
-		ofs += PGSIZE
+		ofs += PGSIZE;
 	}
 	free(info); 
 	return true;
