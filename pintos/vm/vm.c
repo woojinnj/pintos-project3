@@ -77,7 +77,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if(new_page == NULL) goto err;
 
 		/* vm_type이 뭔지 보고 확인 */
-		switch (type) {
+		switch (VM_TYPE(type)) {
 			/* type이 VM_ANON일때 */
 			case VM_ANON:
 				uninit_new(new_page, upage, init, type, aux, anon_initializer);
