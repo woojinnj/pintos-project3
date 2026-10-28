@@ -23,7 +23,6 @@ vm_init (void) {
 	/* 위쪽 줄은 수정하지 말 것. */
 	/* TODO: 여기에 코드를 작성할 것. */
 	/* 프레임 테이블 초기화 */
-	supplemental_page_table_init(thread_current()->spt);
 	list_init(&frame_table);
 }
 
@@ -92,38 +91,16 @@ err:
 }
 
 /* spt에서 VA를 찾아 페이지를 반환한다. 오류 시 NULL을 반환한다. */
+/* 의심 */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
-	struct page *page = NULL;
-	/* 순회할 해쉬 테이블, 버킷을 담고있음 */
-	struct hash_iterator i;
+	
+	struct page p;
+	struct hash_elem *e;
 
-	// 해시 반복자 초기화
-	hash_first(&i, spt->hash_table);
-	// 해시 안의 모든 hash_elem을 순회, 중간에 끝날 수 있음, hash_next에서 다음 요소가 없으면 NULL을 반환함
-	while (hash_next(&i)) {
-		// 현재 페이지를 hash_cur를 사용해서 가져옴
-		page = hash_entry(hash_cur(&i), struct page, elem);
-		
-		// 지금 가리키고 있는 페이지의 가상 주소와 인자로 주어진 가상 주소가 같으면 이거 반환
-		if(page->va == va) {
-			break;
-		}
-	}
-	return page;
-	/* TODO: 이 함수를 구현할 것. */
-	// for(int i=0; i<spt->spt_table->bucket_cnt; i++){
-	// 	struct list_elem *cur_elem = list_begin(&spt->spt_table->buckets[i]);
-	// 	struct page *cur_page = hash_entry(list_entry(cur_elem, struct hash_elem, list_elem), struct page, elem);
-	// 	if(cur_page->va == va){
-	// 		return cur_page;		
-	// 	}
-	// }
-	// if(spt==NULL || va == NULL) return NULL;
-	// int hash_va = hash_int((uint64_t)va) % spt->spt_table->bucket_cnt;
-	// struct hash_elem *find_elem = list_elem_to_hash_elem(list_begin(&spt->spt_table->buckets[hash_va]));
-	// if(find_elem)
-	// page = hash_entry(find_elem, struct page, elem);
+	p.va = pg_round_down(va);
+	e = hash_find (&spt->hash_table, &p.elem);
+	return e != NULL ? hash_entry (e, struct page, elem) : NULL;
 }
 
 /* 검증을 거쳐 PAGE를 spt에 삽입한다. */
@@ -144,8 +121,8 @@ spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 	// 	if(cur_page == page) {
 	// 		return succ;
 	// 	}
-	// }
-	if (hash_insert(spt->hash_table, &page->elem) == NULL) {
+	// }x
+	if (hash_insert(&spt->hash_table, &page->elem) == NULL) {
 		succ = true;
 	}
 	
@@ -224,11 +201,11 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 
 	/* 쓰기 권한이 없거나 사용자 주소가 아니면 false */
 	/* 이 조건에 안 걸리고 페이지가 존재해도 false */
-	if ( !write || !user ) {
+	if ( !write || !user || !not_present ) {
     	return false;
 	}
 	else if (not_present) {
-    	return false;
+    	page = spt_find_page(spt, addr);
 	}
 	return vm_do_claim_page (page);
 }
@@ -287,7 +264,7 @@ static bool my_less(const struct hash_elem *a, const struct hash_elem *b, void *
 /* 새 supplemental page table을 초기화한다. */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(spt->hash_table, my_hash, my_less, NULL);
+	hash_init(&spt->hash_table, my_hash, my_less, NULL);
 }
 
 /* src의 supplemental page table을 dst로 복사한다. */

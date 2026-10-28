@@ -89,9 +89,8 @@ struct page_operations {
  * 이 구조체에는 특정 설계를 강제하지 않는다.
  * 설계는 전적으로 자유이다. */
 struct supplemental_page_table {
-	struct hash *hash_table;
-};
-
+	struct hash hash_table;
+}; 
 struct file_info {
 	struct file *file;
 	off_t ofs;
@@ -101,7 +100,7 @@ struct file_info {
 	bool writable;
 };
 
-#include "threads/thread.h"
+
 void supplemental_page_table_init (struct supplemental_page_table *spt);
 bool supplemental_page_table_copy (struct supplemental_page_table *dst,
 		struct supplemental_page_table *src);
