@@ -102,11 +102,11 @@ err:
 /* 의심 */
 struct page *
 spt_find_page (struct supplemental_page_table *spt, void *va) {
-	
 	struct page p;
 	struct hash_elem *e;
 
 	p.va = pg_round_down(va);
+	/* claude */
 	e = hash_find (&spt->hash_table, &p.elem);
 	return e != NULL ? hash_entry (e, struct page, elem) : NULL;
 }
@@ -159,14 +159,12 @@ vm_get_frame (void) {
 	void *new_addr = palloc_get_page(PAL_USER);
 	if(!new_addr) return NULL;
 	frame = malloc(sizeof(*frame));
-	if(!frame) return NULL;
+	ASSERT (frame != NULL);
 	/* frame 초기화 */
 	frame->kva = new_addr;		/* kva에 new_addr 넣어줌 */
 	frame->page = NULL;			/* page에 NULL을 넣어줌 */
 	/* frame_table에 elem넣어줌 */
 	list_insert_ordered(&frame_table, &frame->elem, my_list_less, NULL);	
-
-	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
 	return frame;
 }
@@ -193,11 +191,11 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 	/* TODO: 폴트가 유효한지 검증한다. */
 	/* TODO: 여기에 코드를 작성할 것. */
 
-	/* 쓰기 권한이 없거나 사용자 주소가 아니면 false */
-	/* 이 조건에 안 걸리고 페이지가 존재해도 false */
+	/* 쓰기 권한이 없거나 사용자 주소가 아니면, 페이지 권한과 맞지 않는 작업을 한 경우 false */
 	if ( !write || !user || !not_present ) {
     	return false;
 	}
+	/* 페이지를 못찾았을경우 SPT에서 찾아줌 */
 	else if (not_present) {
     	page = spt_find_page(spt, addr);
 	}
