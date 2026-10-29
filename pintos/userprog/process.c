@@ -671,9 +671,9 @@ lazy_load_segment(struct page *page, void *aux)
 	struct file_info *info = (struct file_info *)aux;
 	
 	/* 파일의 읽을 위치를 ofs로 설정한다 */
-	// file_seek(info->file, info->ofs);
+	file_seek(info->file, info->ofs);
 	/* 잘못된 read 발생시 false 반환 */
-	if(file_read(info->file, page->frame->kva + info->ofs, info->read_bytes) != (int)(info->read_bytes)) {
+	if(file_read(info->file, page->frame->kva, info->read_bytes) != (int)(info->read_bytes)) {
 		palloc_free_page(page->frame->kva);
         page->frame->page = NULL;
 		page->frame = NULL;
@@ -681,6 +681,7 @@ lazy_load_segment(struct page *page, void *aux)
 	}
 	/*  */
 	memset(page->frame->kva + info->read_bytes, 0, info->zero_bytes);
+	free(info);
 	return true;
 }
 
@@ -705,15 +706,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	/* 의심 */
-	struct file_info *info = malloc(sizeof(struct file_info));
-	if(!info) return false;
+	
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* 이 페이지를 어떻게 채울지 계산한다.
 		 * FILE에서 PAGE_READ_BYTES 바이트를 읽고
 		 * 마지막 PAGE_ZERO_BYTES 바이트는 0으로 채운다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		/* load_segment에서 file_info가 생성되고 이후 페이지를 실제로 사용할때 info 정보를 사용하기 때문에
+		   페이지 마다 각각 info가 생성되어야한다.  */
+		struct file_info *info = malloc(sizeof(struct file_info));
+		if(!info) return false;
 
 		/* TODO: lazy_load_segment에 정보를 넘기기 위해 aux를 설정한다. */
 		/* file_info에 load_segment 인자 세팅후 aux에 시작 주소 전달 */
@@ -737,7 +741,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		upage += PGSIZE;
 		ofs += PGSIZE;
 	}
-	free(info); 
+	/* free(info)를 해주면 안되는 이유는 처음에는 실제 데이터를 사용하기 전까지 안쓰고 있는 상태로 신호를 대기하다가
+	   데이터를 사용하면 file_info에서 데이터를 로드해야하기 때문에 free해주면 안된다. */
 	return true;
 }
 
@@ -753,14 +758,19 @@ setup_stack (struct intr_frame *if_) {
 	/* TODO: 여기에 코드를 작성하세요 */
 	/* user_rsp를 intr_frame으로 부터 받아와서 담아둠. */
 
+	/* 페이지를 가져온다 */
 	if(!vm_alloc_page(VM_USER_STACK | VM_ANON, stack_bottom, true)) {
+		return success;
+	}
+	/* 위에서 받은 페이지를 물리<->가상 페이지로 매핑한다 */
+	if(!vm_claim_page(stack_bottom)){
 		return success;
 	}
 	/* rsp가 유저 스택을 봄 */
 	if_->rsp = USER_STACK;
 	/* 스레드안 stack_bottom을 설정 */
 	thread_current()->stack_bottom = stack_bottom;
-
+	success = true;
 	return success;
 }
 #endif /* VM */

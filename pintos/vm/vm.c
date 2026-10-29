@@ -191,13 +191,26 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 	/* TODO: 폴트가 유효한지 검증한다. */
 	/* TODO: 여기에 코드를 작성할 것. */
 
-	/* 쓰기 권한이 없거나 사용자 주소가 아니면, 페이지 권한과 맞지 않는 작업을 한 경우 false */
-	if ( !write || !user || !not_present ) {
-    	return false;
+	/* 1. 커널 폴트이면 거절
+	 * 2. 페이지 권한과 맞지 않는 작업을 한 경우 거절
+	 * 3. 진짜 페이지가 존재하지 않는 경우 spt에서 페이지를 일단 가져옴 */
+	if ( !user ) {
+		return false;
 	}
-	/* 페이지를 못찾았을경우 SPT에서 찾아줌 */
-	else if (not_present) {
-    	page = spt_find_page(spt, addr);
+	else if ( !not_present ) {
+		return false;
+	}
+	else {
+		page = spt_find_page(spt, addr);
+		/* 4. 페이지를 못 찾으면 실패 */
+		if (page == NULL) {
+			return false;
+		}
+		
+		/* 5. 인자로 준 쓰기 권한과 실제 페이지의 쓰기 권한과 맞지 않으면 실패 */
+		else if (page->writable != write) {
+			return false;
+		}
 	}
 	return vm_do_claim_page (page);
 }
