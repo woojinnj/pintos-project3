@@ -657,7 +657,7 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
-// #else
+#else
 /* 여기서부터의 코드는 프로젝트 3 이후에 사용된다.
  * 프로젝트 2만을 위해 함수를 구현하고 싶다면
  * 위쪽 블록에서 구현하라. */
