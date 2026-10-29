@@ -749,8 +749,17 @@ setup_stack (struct intr_frame *if_) {
 
 	/* TODO: stack_bottom에 스택을 매핑하고 즉시 해당 페이지를 claim한다.
 	 * TODO: 성공하면 rsp를 그에 맞게 설정한다.
-	 * TODO: 해당 페이지가 스택임을 표시해야 한다. */
+	 * TODO: 해당 페이지가 스택임을 표시해야 한다 (). */
 	/* TODO: 여기에 코드를 작성하세요 */
+	/* user_rsp를 intr_frame으로 부터 받아와서 담아둠. */
+
+	if(!vm_alloc_page(VM_USER_STACK | VM_ANON, stack_bottom, true)) {
+		return success;
+	}
+	/* rsp가 유저 스택을 봄 */
+	if_->rsp = USER_STACK;
+	/* 스레드안 stack_bottom을 설정 */
+	thread_current()->stack_bottom = stack_bottom;
 
 	return success;
 }
