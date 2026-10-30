@@ -176,7 +176,19 @@ vm_get_frame (void) {
 /* 스택을 확장한다. */
 static void
 vm_stack_growth (void *addr) {
-
+	/* stack은 거꾸로 자라기 때문에 stack_bottom이 addr보다 크면 아직
+	   페이지가 다 할당이 안된것이기 때문에 스택 공간을 늘려줌 */
+	struct thread* t1 = thread_current();
+	while(t1->stack_bottom > addr){
+		/* stack_bottom */
+		void* next = t1->stack_bottom - PGSIZE;
+		bool status = vm_alloc_page(VM_ANON | VM_USER_STACK, next, true);
+		if(!status){
+			return;
+		}
+		/* vm_alloc_page 성공시에만 stack_bottom을 내리도록 함 */
+		t1->stack_bottom = next;
+	}
 }
 
 /* 쓰기 보호된 페이지에서 발생한 폴트를 처리한다. */
@@ -213,6 +225,12 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 		
 		/* 5. 페이지가 쓰기가 불가능한 권한일때 쓰려고 하면 false 반환 */
 		else if ( page->writable == false && write == true ) {
+			return false;
+		}
+		/* 최대 스택 크기를 넘기지 않고 스택 바텀이 addr보다 작을때 stack_growth 실행 */
+		if(addr < thread_current()->stack_bottom && addr > USER_STACK - (PGSIZE*256)){
+			vm_stack_growth(addr);
+		}else{
 			return false;
 		}
 	}
