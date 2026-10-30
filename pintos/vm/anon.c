@@ -2,7 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
-#include "vaddr.h"
+#include "threads/vaddr.h"
 #include <string.h>
 
 /* 아래 줄은 수정하지 말 것 */
