@@ -19,6 +19,7 @@
 #include "userprog/process.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -68,10 +69,17 @@ check_buffer (const void *buffer, size_t size, bool writable) {
 	uintptr_t end = start + size - 1;
 	for (uintptr_t page = (uintptr_t) pg_round_down (buffer);;
 			page += PGSIZE) {
-		uint64_t *pte = pml4e_walk (thread_current ()->pml4, page, 0);
-		if (pte == NULL || (*pte & (PTE_P | PTE_U)) != (PTE_P | PTE_U) ||
-				(writable && !is_writable (pte)))
-			syscall_exit (-1);
+		/* spt에서 페이지를 찾아온다 */
+		struct page* find_page = spt_find_page(&thread_current()->spt, (void *)page);
+		/* spt에서 페이지를 찾지 못하거나, 권한이 읽기권한인 페이지에 쓰기를 하려하면 실패 */
+		if(find_page == NULL || (find_page->writable == false && writable == true) ){
+			syscall_exit(-1);
+		}
+		/* 찾은 페이지가 frame이랑 연결이 안되어있고 vm_claim_page의 결과가 false이면 실패 */
+		if(find_page->frame == NULL && !vm_claim_page(find_page->va)){
+			syscall_exit(-1);
+		}
+		/* 파일끝 위치 - 현재 위치가 PGSIZE보다 작으면 종료 */
 		if (end - page < PGSIZE)
 			break;
 	}

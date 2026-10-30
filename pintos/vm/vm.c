@@ -207,8 +207,8 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 			return false;
 		}
 		
-		/* 5. 인자로 준 쓰기 권한과 실제 페이지의 쓰기 권한과 맞지 않으면 실패 */
-		else if (page->writable != write) {
+		/* 5. 페이지가 쓰기가 불가능한 권한일때 쓰려고 하면 false 반환 */
+		else if ( page->writable == false && write == true ) {
 			return false;
 		}
 	}
