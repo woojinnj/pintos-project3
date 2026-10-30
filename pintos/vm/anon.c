@@ -2,6 +2,8 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "vaddr.h"
+#include <string.h>
 
 /* 아래 줄은 수정하지 말 것 */
 static struct disk *swap_disk;
@@ -30,7 +32,13 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* 핸들러를 설정한다 */
 	page->operations = &anon_ops;
 
+	/* anon_page를 가리키기는 하는데, 여기서는 0으로 밀어주는 작업만 하면 됨
+	 * 혹시 모르니 남겨놓는 코드 줄 */
 	struct anon_page *anon_page = &page->anon;
+	/* kva에 해당하는 곳을 페이지 크기(4KB)만큼 0으로 설정하고, true 반환
+	 * swap in/out 할 때 이 파일을 다시 봐야 함 */
+	memset(kva, 0, PGSIZE);
+	return true;
 }
 
 /* 스왑 디스크에서 내용을 읽어 페이지를 swap in한다. */

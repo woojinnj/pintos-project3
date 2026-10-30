@@ -157,9 +157,13 @@ vm_get_frame (void) {
 	/* TODO: 이 함수를 구현할 것. */
 	/* User Page 가져옴 */
 	void *new_addr = palloc_get_page(PAL_USER);
-	if(!new_addr) return NULL;
+	if(!new_addr) {
+		return NULL;
+	}
+	
 	frame = malloc(sizeof(*frame));
 	ASSERT (frame != NULL);
+
 	/* frame 초기화 */
 	frame->kva = new_addr;		/* kva에 new_addr 넣어줌 */
 	frame->page = NULL;			/* page에 NULL을 넣어줌 */
@@ -237,7 +241,11 @@ vm_claim_page (void *va) {
 /* PAGE를 claim하고 MMU를 설정한다. */
 static bool
 vm_do_claim_page (struct page *page) {
+	/* 이 함수가 프레임을 못 가지고 오면 실패 */
 	struct frame *frame = vm_get_frame ();
+	if (frame == NULL) {
+		return false;
+	}
 
 	/* 서로 연결한다. */
 	frame->page = page;
@@ -246,7 +254,11 @@ vm_do_claim_page (struct page *page) {
 	/* TODO: 페이지의 VA를 프레임의 PA에 매핑하도록 페이지 테이블 엔트리를 삽입한다. */
 	/* 수정 필요 가능성 높음 */
 	bool result = pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable);  /* pml4가 들어가는게 아니면 임시로 read/write다 되는 true로 바꿔넣기 */
-	if(!result) return false;
+
+	/* pml4_set_page가 실패하면 assert문에 걸려서 패닉이 나게 됨, 단순 false만 하면 됨 */
+	if(!result) {
+		return false;
+	}
 	return swap_in (page, frame->kva);
 }
 
