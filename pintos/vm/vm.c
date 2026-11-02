@@ -118,7 +118,6 @@ spt_insert_page (struct supplemental_page_table *spt, struct page *page) {
 	if (hash_insert(&spt->hash_table, &page->elem) == NULL) {
 		succ = true;
 	}
-	
 	return succ;
 }
 
@@ -157,9 +156,13 @@ vm_get_frame (void) {
 	/* TODO: 이 함수를 구현할 것. */
 	/* User Page 가져옴 */
 	void *new_addr = palloc_get_page(PAL_USER);
-	if(!new_addr) return NULL;
+	if(!new_addr) {
+		return NULL;
+	}
+	
 	frame = malloc(sizeof(*frame));
 	ASSERT (frame != NULL);
+
 	/* frame 초기화 */
 	frame->kva = new_addr;		/* kva에 new_addr 넣어줌 */
 	frame->page = NULL;			/* page에 NULL을 넣어줌 */
@@ -170,9 +173,22 @@ vm_get_frame (void) {
 }
 
 /* 스택을 확장한다. */
-static void
+static bool
 vm_stack_growth (void *addr) {
-
+	/* stack은 거꾸로 자라기 때문에 stack_bottom이 addr보다 크면 아직
+	   페이지가 다 할당이 안된것이기 때문에 스택 공간을 늘려줌 */
+	struct thread* t1 = thread_current();
+	while(t1->stack_bottom > addr){
+		/* stack_bottom */
+		void* next = t1->stack_bottom - PGSIZE;
+		bool status = vm_alloc_page(VM_ANON | VM_USER_STACK, next, true);
+		if(!status){
+			return false;
+		}
+		/* vm_alloc_page 성공시에만 stack_bottom을 내리도록 함 */
+		t1->stack_bottom = next;
+	}
+	return true;
 }
 
 /* 쓰기 보호된 페이지에서 발생한 폴트를 처리한다. */
@@ -188,30 +204,49 @@ vm_try_handle_fault (struct intr_frame *f , void *addr ,
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
 	int result;
+	void* user_rsp;
 	/* TODO: 폴트가 유효한지 검증한다. */
 	/* TODO: 여기에 코드를 작성할 것. */
-
-	/* 1. 커널 폴트이면 거절
-	 * 2. 페이지 권한과 맞지 않는 작업을 한 경우 거절
-	 * 3. 진짜 페이지가 존재하지 않는 경우 spt에서 페이지를 일단 가져옴 */
-	if ( !user ) {
+	
+	/* 이미 매핑된 페이지의 권한 위반이면 거절 */
+	if ( !not_present ) {
 		return false;
 	}
-	else if ( !not_present ) {
+	
+	/* 주소가 커널 주소 접근이면 거절 (유저/커널 모드 무관) */
+	if(is_kernel_vaddr(addr)){
 		return false;
 	}
-	else {
+	/* 커널 모드일 경우 rsp를 유저 rsp로 사용 */
+	if(user==false){
+		user_rsp = thread_current()->rsp;
+	}else{
+		user_rsp = (void*)f->rsp;
+	}
+	/* spt에서 addr로 페이지를 찾아서 확인 */
+	page = spt_find_page(spt, addr);
+	/* 페이지를 못찾았을 경우 가짜 폴트인지 진짜 폴트인지 확인
+	 * 1. addr이 스택 영역사이에 있는지 확인하고 rsp-8보다 addr 아래쪽에 있지는 않은지 확인 (하나라도 조건과 맞지 않을 경우 false 진짜 폴트 반환)
+	 * 2. stack_growth 함수 실행후 실패했을 경우 false로 진짜 폴트라고 반환 
+	 * 3. spt_find_page로 페이지를 찾아와서 page에 다시 담아줌 
+	 * 4. 여전히 page가 NULL이라면 진짜폴트임으로 종료 
+	 * 5. 이후 페이지가 쓰기가 불가능한 권한에서 쓰기를 하려하면 false로 진짜 폴트 반환 */
+	if (page == NULL) {	
+		if(!(addr < USER_STACK && user_rsp-8 <= addr && addr >= USER_STACK - (1<<20))){
+			return false;
+		}
+		if(!vm_stack_growth(addr)){
+			return false;	
+		}
 		page = spt_find_page(spt, addr);
-		/* 4. 페이지를 못 찾으면 실패 */
-		if (page == NULL) {
-			return false;
-		}
-		
-		/* 5. 인자로 준 쓰기 권한과 실제 페이지의 쓰기 권한과 맞지 않으면 실패 */
-		else if (page->writable != write) {
+		if(page == NULL){
 			return false;
 		}
 	}
+	if ( page->writable == false && write == true ) {
+		return false;
+	}
+
 	return vm_do_claim_page (page);
 }
 
@@ -237,7 +272,11 @@ vm_claim_page (void *va) {
 /* PAGE를 claim하고 MMU를 설정한다. */
 static bool
 vm_do_claim_page (struct page *page) {
+	/* 이 함수가 프레임을 못 가지고 오면 실패 */
 	struct frame *frame = vm_get_frame ();
+	if (frame == NULL) {
+		return false;
+	}
 
 	/* 서로 연결한다. */
 	frame->page = page;
@@ -246,7 +285,11 @@ vm_do_claim_page (struct page *page) {
 	/* TODO: 페이지의 VA를 프레임의 PA에 매핑하도록 페이지 테이블 엔트리를 삽입한다. */
 	/* 수정 필요 가능성 높음 */
 	bool result = pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable);  /* pml4가 들어가는게 아니면 임시로 read/write다 되는 true로 바꿔넣기 */
-	if(!result) return false;
+
+	/* pml4_set_page가 실패하면 assert문에 걸려서 패닉이 나게 됨, 단순 false만 하면 됨 */
+	if(!result) {
+		return false;
+	}
 	return swap_in (page, frame->kva);
 }
 

@@ -122,6 +122,8 @@ struct thread {
 	/* 스레드가 소유한 전체 가상 메모리를 위한 테이블. */
 	struct supplemental_page_table spt;
 	void* stack_bottom;
+	/* user rsp를 저장해둬야 커널 모드에서 rsp가 유저 rsp를 보게 할 수 있음 */
+	void* rsp;
 #endif
 	int64_t timer_tick;
 
