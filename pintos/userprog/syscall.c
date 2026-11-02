@@ -72,7 +72,18 @@ check_buffer (const void *buffer, size_t size, bool writable) {
 		/* spt에서 페이지를 찾아온다 */
 		struct page* find_page = spt_find_page(&thread_current()->spt, (void *)page);
 		/* spt에서 페이지를 찾지 못하거나, 권한이 읽기권한인 페이지에 쓰기를 하려하면 실패 */
-		if(find_page == NULL || (find_page->writable == false && writable == true) ){
+		if(find_page == NULL){
+			/* 첫 페이지는 버퍼의 시작주소로 판정해야 rsp 근처에서 오판하지 않음 */
+			void *probe = (void *)(page < start ? start : page);
+			if(!vm_try_handle_fault(NULL, probe, false, writable, true)){
+				syscall_exit(-1);
+			}
+			find_page = spt_find_page(&thread_current()->spt, (void *)page);
+			if(find_page == NULL){
+				syscall_exit(-1);
+			}
+		}
+		if((find_page->writable == false && writable == true) ){
 			syscall_exit(-1);
 		}
 		/* 찾은 페이지가 frame이랑 연결이 안되어있고 vm_claim_page의 결과가 false이면 실패 */
@@ -264,6 +275,7 @@ sys_dup2 (int oldfd, int newfd) {
 void
 syscall_handler (struct intr_frame *f) {
 	int fd = f->R.rdi;
+	thread_current()->rsp = (void*)f->rsp;
 	struct file_handle *handle;
 	const char *name;
 	switch (f->R.rax) {
