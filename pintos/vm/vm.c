@@ -298,6 +298,7 @@ static uint64_t my_hash(const struct hash_elem *e, void *aux UNUSED) {
     struct page *entry = hash_entry(e, struct page, elem);
     return hash_int(entry->va);
 }
+
 // 비교 함수 (정렬 기준)
 static bool my_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
 	struct page *ea = hash_entry(a, struct page, elem);
@@ -305,22 +306,39 @@ static bool my_less(const struct hash_elem *a, const struct hash_elem *b, void *
 	return ea->va < eb->va;
 }
 
+/* elem에서 페이지를 가져오고, 페이지를 반환하는 함수
+ * hash_clear 함수의 destructor 자리에 들어갈 예정 */
+static void my_action(struct hash_elem *elem, void *aux) {
+	struct page *p = hash_entry(elem, struct page, elem);
+	/* destroy(p)라고만 적어놔도 p->operations->destroy (p)와
+	 * 같은 효과를 가지도록 매크로로 선언된 상태 */
+	destroy(p);
+}
+
 
 /* 새 supplemental page table을 초기화한다. */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt) {
-	hash_init(&spt->hash_table, my_hash, my_less, NULL);
+	hash_init(&spt->hash_table, my_hash, my_less, my_action);
 }
 
 /* src의 supplemental page table을 dst로 복사한다. */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	/* 해시 안을 순회하면서 얻는 페이지에 대해서 작업을 수행 */
+	struct hash_iterator i;
+	hash_first(&i, &src->hash_table);
+	while (hash_next(&i)) {
+		struct page *p = hash_entry(hash_cur(&i), struct page, elem);
+
+	}
 }
 
 /* supplemental page table이 보유한 자원을 해제한다. */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
 	/* TODO: 스레드가 보유한 supplemental_page_table을 모두 파괴하고
 	 * TODO: 수정된 내용을 모두 저장 장치에 writeback한다. */
+	hash_destroy(&spt->hash_table, my_action);
 }

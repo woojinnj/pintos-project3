@@ -194,6 +194,12 @@ __do_fork (void *aux) {
 	if (current->pml4 == NULL)
 		goto error;
 	process_activate (current);
+	/* spt를 복사할때 file_info를 부모요소랑 같이 쓰면 문제가 발생함 때문에 먼저 파일을 복사해서 file_info를 복제한 후 spt를 복제해야함 */
+	lock_acquire (&filesys_lock);
+	if (parent->executable != NULL)
+		current->executable = file_duplicate (parent->executable);
+	bool executable_ok = parent->executable == NULL || current->executable != NULL;
+	lock_release (&filesys_lock);
 #ifdef VM
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
@@ -203,11 +209,7 @@ __do_fork (void *aux) {
 #endif
 	if (!syscall_files_copy (parent))
 		goto error;
-	lock_acquire (&filesys_lock);
-	if (parent->executable != NULL)
-		current->executable = file_duplicate (parent->executable);
-	bool executable_ok = parent->executable == NULL || current->executable != NULL;
-	lock_release (&filesys_lock);
+	
 	if (!executable_ok)
 		goto error;
 	frame.R.rax = 0;
@@ -677,6 +679,8 @@ lazy_load_segment(struct page *page, void *aux)
 		palloc_free_page(page->frame->kva);
         page->frame->page = NULL;
 		page->frame = NULL;
+		/* 실패시에도 info의 메모리를 회수해야함 */
+		free(info);
 		return false;
 	}
 	/*  */

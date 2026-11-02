@@ -10,6 +10,7 @@
 
 #include "vm/vm.h"
 #include "vm/uninit.h"
+#include <stdlib.h>
 
 static bool uninit_initialize (struct page *page, void *kva);
 static void uninit_destroy (struct page *page);
@@ -62,7 +63,8 @@ uninit_initialize (struct page *page, void *kva) {
  * PAGE는 호출자가 해제한다. */
 static void
 uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: 이 함수를 구현할 것.
-	 * TODO: 할 일이 없으면 그냥 반환한다. */
+	struct uninit_page *uninit = &page->uninit;
+	/* aux로 넘긴 file_info 구조체를 해제하고, 페이지까지 할당 해제 */
+	free(uninit->aux);
+	vm_dealloc_page(page);
 }
