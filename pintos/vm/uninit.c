@@ -64,7 +64,6 @@ uninit_initialize (struct page *page, void *kva) {
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit = &page->uninit;
-	/* aux로 넘긴 file_info 구조체를 해제하고, 페이지까지 할당 해제 */
+	/* aux로 넘긴 file_info 구조체를 해제, 페이지 할당 해제는 spt kill 시 자동으로 한다 */
 	free(uninit->aux);
-	vm_dealloc_page(page);
 }
