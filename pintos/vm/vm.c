@@ -369,6 +369,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst,
 			}
 			
 			/* 페이지를 할당하는건 단순 bool 반환이고, 여기까지 왔으면 페이지를 찾을 수 있기 때문에 따로 조건 검사를 하지 않음 */
+			/* 현 시점의 thread_current()->spt는 dst이므로 dst를 따로 명시하지 않고 코드를 작성함 */
 			struct page *child = spt_find_page(dst, p->va);
 			memcpy(child->frame->kva, p->frame->kva, PGSIZE);
 		}
