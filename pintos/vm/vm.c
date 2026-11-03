@@ -6,6 +6,8 @@
 #include "lib/kernel/hash.h"
 #include "threads/mmu.h"
 #include "userprog/process.h"
+#include "lib/string.h"
+
 /* 프레임 테이블 전역으로 선언 */
 /* 1M바이트니까 1M/4KB 하면 256개여서 256개로 배열 선언하면 되지 않나? */
 struct list frame_table;
@@ -283,8 +285,7 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: 페이지의 VA를 프레임의 PA에 매핑하도록 페이지 테이블 엔트리를 삽입한다. */
-	/* 수정 필요 가능성 높음 */
-	bool result = pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable);  /* pml4가 들어가는게 아니면 임시로 read/write다 되는 true로 바꿔넣기 */
+	bool result = pml4_set_page (thread_current()->pml4, page->va, frame->kva, page->writable);
 
 	/* pml4_set_page가 실패하면 assert문에 걸려서 패닉이 나게 됨, 단순 false만 하면 됨 */
 	if(!result) {
@@ -293,18 +294,34 @@ vm_do_claim_page (struct page *page) {
 	return swap_in (page, frame->kva);
 }
 
-// 해시 함수
+/* 해시 함수 */
 static uint64_t my_hash(const struct hash_elem *e, void *aux UNUSED) {
     struct page *entry = hash_entry(e, struct page, elem);
     return hash_int(entry->va);
 }
-// 비교 함수 (정렬 기준)
+
+/* 비교 함수 (정렬 기준) */
 static bool my_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
 	struct page *ea = hash_entry(a, struct page, elem);
 	struct page *eb = hash_entry(b, struct page, elem);
 	return ea->va < eb->va;
 }
 
+/* elem에서 페이지를 가져오고, 페이지를 반환하는 함수
+ * hash_clear 함수의 destructor 자리에 들어갈 예정 */
+static void my_action(struct hash_elem *elem, void *aux UNUSED) {
+	struct page *p = hash_entry(elem, struct page, elem);
+	/* 현재 종료하는 프로세스의 spt와 관련된 frame만 정리 (frame을 순회하면서 정리하면 다른 스레드들의 frame도 정리됨으로 순회해서 정리하면 안됨) */
+	struct frame *f = p->frame;
+	/* spt와 관련된 프레임 정리 (NULL이 아닐 때 프레임 테이블에서 제거 후 반환) */
+	if(f != NULL) {
+		list_remove(&f->elem);
+		free(f);
+	}
+
+	/* 마지막으로 아래 함수 한줄로 페이지 반환을 처리 */
+	vm_dealloc_page(p);
+}
 
 /* 새 supplemental page table을 초기화한다. */
 void
@@ -314,13 +331,57 @@ supplemental_page_table_init (struct supplemental_page_table *spt) {
 
 /* src의 supplemental page table을 dst로 복사한다. */
 bool
-supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
-		struct supplemental_page_table *src UNUSED) {
-}
+supplemental_page_table_copy (struct supplemental_page_table *dst,
+		struct supplemental_page_table *src) {
+	/* 해시 안을 순회하면서 얻는 페이지에 대해서 작업을 수행 */
+	struct hash_iterator i;
+	hash_first(&i, &src->hash_table);
+	/* 다음 해쉬 버킷이 없으면 NULL이 반환됨 */
+	while (hash_next(&i)) {
+		/* 페이지 가져옴 */
+		struct page *p = hash_entry(hash_cur(&i), struct page, elem);
+		/* VM_TYPE이 UNINIT일때 부모 file_info를 그대로 복제해서 자식한테 줘야함 
+		-> 부모 file_info 같이 사용하면 부모프로세스 종료시
+		 * dangling pointer, double free 문제 발생 */
+		if (VM_TYPE(p->operations->type) == VM_UNINIT) {
+			struct file_info *par_info = (struct file_info *)p->uninit.aux;
+			struct file_info *chi_info = malloc(sizeof(struct file_info));
+			if (chi_info == NULL) {
+				return false;
+			}
+			/* 자식 file_info에 부모 file_info 복사 (포인터 복사가 아니라 내용물 복사해야해서 이렇게 씀) */
+			*chi_info = *par_info;
+			/* excutable 변경해주지 않으면 부모 스레드가 종료되면 같은 포인터를 사용했어서 file을 볼 수 없음 */
+			chi_info->file = thread_current()->executable;
+			if (!vm_alloc_page_with_initializer(p->uninit.type, p->va, p->writable, p->uninit.init, chi_info)) {
+				free(chi_info);
+				return false;
+			}
+		}
+
+		else {
+			if (!vm_alloc_page(page_get_type(p), p->va, p->writable)) {
+				return false;
+			}
+
+			if (!vm_claim_page(p->va)) {
+				return false;
+			}
+			
+			/* 페이지를 할당하는건 단순 bool 반환이고, 여기까지 왔으면 페이지를 찾을 수 있기 때문에 따로 조건 검사를 하지 않음 */
+			/* 현 시점의 thread_current()->spt는 dst이므로 dst를 따로 명시하지 않고 코드를 작성함 */
+			struct page *child = spt_find_page(dst, p->va);
+			memcpy(child->frame->kva, p->frame->kva, PGSIZE);
+		}
+	}
+
+	/* 페이지별로 순회하면서 모든 동작이 정상 실행되면 true 반환 */
+	return true;
+} 
 
 /* supplemental page table이 보유한 자원을 해제한다. */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
-	/* TODO: 스레드가 보유한 supplemental_page_table을 모두 파괴하고
-	 * TODO: 수정된 내용을 모두 저장 장치에 writeback한다. */
+supplemental_page_table_kill (struct supplemental_page_table *spt) {
+	/* 보유한 자원을 해제하라고 했지 테이블을 없애라고는 하지 않았으므로 hash_clear만 실행 */
+	hash_clear(&spt->hash_table, my_action);
 }

@@ -43,7 +43,9 @@ file_backed_swap_out (struct page *page) {
 /* 파일 기반 페이지를 파괴한다. PAGE는 호출자가 해제한다. */
 static void
 file_backed_destroy (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
+	/* 더티 비트 확인후 writeback 처리 */
+	// if()
 }
 
 /* mmap을 수행한다 */
