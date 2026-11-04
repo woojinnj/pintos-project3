@@ -52,6 +52,9 @@ file_backed_destroy (struct page *page) {
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	
+	//vm_alloc_page_with_initializer(VM_UNINIT,addr,writable,file_backed_initializer,)
+			
 }
 
 /* munmap을 수행한다 */

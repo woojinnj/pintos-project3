@@ -272,6 +272,26 @@ sys_dup2 (int oldfd, int newfd) {
 	return newfd;
 }
 
+static void *
+sys_mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	if(fd>=FD_COUNT || fd<=1 || length==0){
+		return NULL;
+	}
+	struct file *f = get_handle(fd)->file;
+	if(file_length(f)==0){
+		return NULL;
+	}
+	if(addr==0|| (uintptr_t)addr%PGSIZE!=0){
+		return NULL;
+	}     
+	for(void* i=addr; i<=addr+length; i+=PGSIZE){
+		if(spt_find_page(thread_current()->spt, i) != NULL){
+			return NULL;
+		}
+	}
+	do_mmap(addr, length, writable, f , offset);
+}
+
 void
 syscall_handler (struct intr_frame *f) {
 	int fd = f->R.rdi;
@@ -355,6 +375,8 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_DUP2:
 			f->R.rax = sys_dup2 (fd, f->R.rsi);
 			break;
+		case SYS_MMAP:
+
 		default:
 			syscall_exit (-1);
 	}
