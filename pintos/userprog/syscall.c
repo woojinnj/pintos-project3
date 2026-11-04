@@ -273,23 +273,33 @@ sys_dup2 (int oldfd, int newfd) {
 }
 
 static void *
-sys_mmap(void *addr, size_t length, int writable, int fd, off_t offset){
-	if(fd>=FD_COUNT || fd<=1 || length==0){
+sys_mmap(void *addr, size_t length, int writable, int fd, off_t offset) {
+	/* fd 번호가 유효한 범위가 아니거나 읽어올 길이가 0이면 실패 */
+	if (fd >= FD_COUNT || fd <= 1 || length == 0) {
 		return NULL;
 	}
+
+	/* 파일을 열었는데 길이가 0이면 실패 */
 	struct file *f = get_handle(fd)->file;
-	if(file_length(f)==0){
+	if (file_length(f) == 0){
 		return NULL;
 	}
-	if(addr==0|| (uintptr_t)addr%PGSIZE!=0){
+
+	/* 가상 주소가 0이거나 페이지 단위로 주어지지 않았으면 실패 */
+	if (addr==0 || (uintptr_t)addr%PGSIZE != 0) {
 		return NULL;
-	}     
-	for(void* i=addr; i<=addr+length; i+=PGSIZE){
+	}   
+
+	/* 해당하는 가상주소로 페이지가 찾아지면 실패 (overlap 미리 방지) */
+	for (void* i=addr; i<=addr+length; i+=PGSIZE) {
 		if(spt_find_page(thread_current()->spt, i) != NULL){
 			return NULL;
 		}
 	}
-	do_mmap(addr, length, writable, f , offset);
+	
+	/* 모든 조건이 통과하면  수행, mmap 도중 실패할 수 있으므로 결과를 지역 변수에 저장 */
+	void *result = do_mmap(addr, length, writable, f, offset);
+	return result;
 }
 
 void
@@ -376,7 +386,10 @@ syscall_handler (struct intr_frame *f) {
 			f->R.rax = sys_dup2 (fd, f->R.rsi);
 			break;
 		case SYS_MMAP:
-
+			/* 맨 위에서 rdi를 fd 번호라고 상정하고 코드를 써놨는데 그건 프로젝트 2 한정이라
+			 * 여기서는 그냥 레지스터를 정상적으로 주면 된다 */
+			f->R.rax = (unsigned) sys_mmap((void *)f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
 		default:
 			syscall_exit (-1);
 	}

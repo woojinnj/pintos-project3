@@ -98,6 +98,7 @@ struct file_info {
 	uint32_t read_bytes;
 	uint32_t zero_bytes;
 	bool writable;
+	int page_cnt; /* 읽을 페이지 개 수 */
 };
 
 #include "threads/thread.h"

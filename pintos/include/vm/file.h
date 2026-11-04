@@ -10,6 +10,7 @@ struct file_page {
 	struct file* file;	/* 파일 정보 */
 	off_t offset;		/* 파일 수정 위치 */
 	size_t read_byte;	/* 읽은 바이트 길이 */
+	int page_cnt;		/* 읽을 페이지 개수 */
 };
 
 /* 파일 처리는 mmap구현 끝나고 처리하는게 가능함 */
