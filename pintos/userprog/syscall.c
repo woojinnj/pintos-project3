@@ -123,7 +123,7 @@ is_file (struct file_handle *handle) {
 /* 호출자가 filesys_lock을 쥐고 있어야 한다. */
 static void
 close_fd (int fd) {
-	struct file_handle *handle = get_handle (fd);
+	struct file_handle *handle = get_handle(fd);
 	if (handle == NULL)
 		return;
 	thread_current ()->fd_table[fd] = NULL;
@@ -285,11 +285,11 @@ sys_mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 		return NULL;
 	}     
 	for(void* i=addr; i<=addr+length; i+=PGSIZE){
-		if(spt_find_page(thread_current()->spt, i) != NULL){
+		if(spt_find_page(&thread_current()->spt, i) != NULL){
 			return NULL;
 		}
 	}
-	do_mmap(addr, length, writable, f , offset);
+	return do_mmap(addr, length, writable, f , offset);
 }
 
 void
