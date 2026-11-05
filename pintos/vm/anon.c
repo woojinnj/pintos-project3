@@ -1,15 +1,17 @@
-/* anon.c: Implementation of page for non-disk image (a.k.a. anonymous page). */
+/* anon.c: 디스크 이미지가 없는 페이지(일명 익명 페이지)의 구현. */
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "threads/vaddr.h"
+#include <string.h>
 
-/* DO NOT MODIFY BELOW LINE */
+/* 아래 줄은 수정하지 말 것 */
 static struct disk *swap_disk;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
 
-/* DO NOT MODIFY this struct */
+/* 이 구조체는 수정하지 말 것 */
 static const struct page_operations anon_ops = {
 	.swap_in = anon_swap_in,
 	.swap_out = anon_swap_out,
@@ -17,35 +19,41 @@ static const struct page_operations anon_ops = {
 	.type = VM_ANON,
 };
 
-/* Initialize the data for anonymous pages */
+/* 익명 페이지용 데이터를 초기화한다 */
 void
 vm_anon_init (void) {
-	/* TODO: Set up the swap_disk. */
+	/* TODO: swap_disk를 설정한다. */
 	swap_disk = NULL;
 }
 
-/* Initialize the file mapping */
+/* 파일 매핑을 초기화한다 */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
-	/* Set up the handler */
+	/* 핸들러를 설정한다 */
 	page->operations = &anon_ops;
 
+	/* anon_page를 가리키기는 하는데, 여기서는 0으로 밀어주는 작업만 하면 됨
+	 * 혹시 모르니 남겨놓는 코드 줄 */
 	struct anon_page *anon_page = &page->anon;
+	/* kva에 해당하는 곳을 페이지 크기(4KB)만큼 0으로 설정하고, true 반환
+	 * swap in/out 할 때 이 파일을 다시 봐야 함 */
+	memset(kva, 0, PGSIZE);
+	return true;
 }
 
-/* Swap in the page by read contents from the swap disk. */
+/* 스왑 디스크에서 내용을 읽어 페이지를 swap in한다. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
 }
 
-/* Swap out the page by writing contents to the swap disk. */
+/* 내용을 스왑 디스크에 써서 페이지를 swap out한다. */
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 }
 
-/* Destroy the anonymous page. PAGE will be freed by the caller. */
+/* 익명 페이지를 파괴한다. PAGE는 호출자가 해제한다. */
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
